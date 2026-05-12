@@ -1,14 +1,14 @@
-"""High-level fixture: build, run, and route an OpenHost app for tests.
+"""High-level fixture: build, run, and route an Openhost app for tests.
 
 Typical use in a project's ``conftest.py``::
 
     import pytest
     from pathlib import Path
-    from openhost_test_harness import OpenHostStack
+    from openhost_test_harness import OpenhostStack
 
     @pytest.fixture(scope="session")
     def app_url():
-        with OpenHostStack(app_dir=Path(__file__).resolve().parent.parent) as stack:
+        with OpenhostStack(app_dir=Path(__file__).resolve().parent.parent) as stack:
             yield stack.url
 """
 
@@ -32,19 +32,19 @@ from openhost_test_harness.container import (
     stop_container,
     wait_for_http,
 )
-from openhost_test_harness.openhost_toml import OpenHostManifest
+from openhost_test_harness.openhost_toml import OpenhostManifest
 
 logger = logging.getLogger(__name__)
 
 
 @attr.define
-class OpenHostStack:
-    """Build, start, and front an OpenHost app with a mock router for tests.
+class OpenhostStack:
+    """Build, start, and front an Openhost app with a mock router for tests.
 
     Use as a context manager. Prefer constructing via the keyword form so
     later additions to optional fields stay backwards-compatible::
 
-        with OpenHostStack(app_dir=Path("..."), rebuild=False) as stack:
+        with OpenhostStack(app_dir=Path("..."), rebuild=False) as stack:
             run_tests_against(stack.url)
     """
 
@@ -57,7 +57,7 @@ class OpenHostStack:
     container_name: str | None = None
     readiness_timeout: float = 30.0
 
-    _manifest: OpenHostManifest = attr.field(init=False)
+    _manifest: OpenhostManifest = attr.field(init=False)
     _data_dir: Path = attr.field(init=False)
     _app_host_port: int = attr.field(init=False)
     _router_port: int = attr.field(init=False)
@@ -66,7 +66,7 @@ class OpenHostStack:
     _resolved_container_name: str = attr.field(init=False)
 
     def __attrs_post_init__(self) -> None:
-        self._manifest = OpenHostManifest.load(self.app_dir / "openhost.toml")
+        self._manifest = OpenhostManifest.load(self.app_dir / "openhost.toml")
         slug = self._manifest.app.name
         self._resolved_image_name = self.image_name or f"openhost-test-{slug}"
         self._resolved_container_name = self.container_name or f"openhost-test-{slug}-container"
@@ -84,7 +84,7 @@ class OpenHostStack:
         return f"http://localhost:{self._app_host_port}"
 
     @property
-    def manifest(self) -> OpenHostManifest:
+    def manifest(self) -> OpenhostManifest:
         return self._manifest
 
     @property

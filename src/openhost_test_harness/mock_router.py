@@ -1,4 +1,4 @@
-"""Mock OpenHost router for local end-to-end tests.
+"""Mock Openhost router for local end-to-end tests.
 
 Proxies HTTP and WebSocket traffic to an upstream app (e.g. an app container),
 injecting ``X-OpenHost-Is-Owner: true`` on every request to simulate an

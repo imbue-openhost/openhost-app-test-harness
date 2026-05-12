@@ -35,14 +35,14 @@ class RoutingSection:
 
 
 @attr.frozen
-class OpenHostManifest:
+class OpenhostManifest:
     app: AppSection
     runtime: RuntimeSection
     data: DataSection
     routing: RoutingSection
 
     @classmethod
-    def load(cls, path: Path) -> "OpenHostManifest":
+    def load(cls, path: Path) -> "OpenhostManifest":
         with open(path, "rb") as f:
             raw = tomllib.load(f)
 
@@ -74,7 +74,7 @@ class OpenHostManifest:
     def env_for_data_mount(self, host_data_dir: Path) -> dict[str, str]:
         """Env vars an app expects when its data dir is mounted at /data/app_data/<name>.
 
-        The container-side path follows OpenHost's convention. ``host_data_dir``
+        The container-side path follows Openhost's convention. ``host_data_dir``
         is unused at the env-var level (the mount is set up separately) but
         accepted here so the helper composes naturally with mount setup.
         """

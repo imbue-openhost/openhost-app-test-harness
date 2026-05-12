@@ -1,7 +1,7 @@
 [project]
 name = "openhost_test_harness"
 version = "0.1.0"
-description = "Reusable test scaffolding for OpenHost apps (mock router, etc.)"
+description = "Reusable test scaffolding for Openhost apps (mock router, etc.)"
 requires-python = ">=3.12"
 dependencies = [
     "attrs>=23",

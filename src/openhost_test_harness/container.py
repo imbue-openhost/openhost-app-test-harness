@@ -1,4 +1,4 @@
-"""Podman lifecycle helpers for the OpenHost test harness."""
+"""Podman lifecycle helpers for the Openhost test harness."""
 
 import logging
 import socket
