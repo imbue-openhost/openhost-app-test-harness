@@ -3,12 +3,13 @@
 Typical use in a project's ``conftest.py``::
 
     import pytest
-    from pathlib import Path
     from openhost_test_harness import OpenhostStack
 
     @pytest.fixture(scope="session")
     def app_url():
-        with OpenhostStack(app_dir=Path(__file__).resolve().parent.parent) as stack:
+        # app_dir is discovered by walking up from the cwd to the nearest
+        # openhost.toml; pass app_dir=... explicitly to override.
+        with OpenhostStack() as stack:
             yield stack.url
 """
 
@@ -32,9 +33,19 @@ from openhost_test_harness.container import (
     stop_container,
     wait_for_http,
 )
-from openhost_test_harness.openhost_toml import OpenhostManifest
+from openhost_test_harness.openhost_toml import (
+    OpenhostManifest,
+    find_manifest_dir,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_app_dir(value: Path | str | None) -> Path:
+    """Coerce the ``app_dir`` argument to a ``Path``, discovering it from the cwd when not given."""
+    if value is None:
+        return find_manifest_dir()
+    return Path(value)
 
 
 @attr.define
@@ -44,11 +55,15 @@ class OpenhostStack:
     Use as a context manager. Prefer constructing via the keyword form so
     later additions to optional fields stay backwards-compatible::
 
-        with OpenhostStack(app_dir=Path("..."), rebuild=False) as stack:
+        with OpenhostStack(rebuild=False) as stack:
             run_tests_against(stack.url)
+
+    ``app_dir`` defaults to the nearest directory containing an ``openhost.toml``,
+    found by walking up from the current working directory. Pass it explicitly to
+    override (e.g. when tests run from outside the app tree).
     """
 
-    app_dir: Path = attr.field(converter=Path)
+    app_dir: Path = attr.field(default=None, converter=_resolve_app_dir)
     rebuild: bool = True
     extra_env: dict[str, str] = attr.field(factory=dict)
     health_path: str | None = None
