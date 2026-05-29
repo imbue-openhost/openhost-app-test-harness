@@ -104,5 +104,8 @@ class OpenhostManifest:
         if self.data.app_temp_data:
             env["OPENHOST_APP_TEMP_DIR"] = f"/data/app_temp_data/{self.app.name}"
         for db in self.data.sqlite:
-            env[f"OPENHOST_SQLITE_{db.upper()}"] = f"{container_dir}/sqlite/{db}.db"
+            db_path = f"{container_dir}/sqlite/{db}.db"
+            # The real platform exposes both the literal-case and upper-case key.
+            env[f"OPENHOST_SQLITE_{db}"] = db_path
+            env[f"OPENHOST_SQLITE_{db.upper()}"] = db_path
         return env

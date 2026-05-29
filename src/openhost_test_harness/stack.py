@@ -40,6 +40,13 @@ from openhost_test_harness.openhost_toml import (
 
 logger = logging.getLogger(__name__)
 
+# Stand-ins for the per-app identity the real OpenHost router mints at install
+# time (a random base58 id and a url-safe service token). Tests need *a* stable
+# value, not a real secret; the mock router doesn't verify either. Override via
+# ``extra_env`` if a test needs specific values.
+_DEFAULT_APP_ID = "testappid234"
+_DEFAULT_APP_TOKEN = "test-openhost-app-token-not-a-real-secret"  # noqa: S105
+
 
 def _resolve_app_dir(value: Path | str | None) -> Path:
     """Coerce the ``app_dir`` argument to a ``Path``, discovering it from the cwd when not given."""
@@ -83,6 +90,12 @@ class OpenhostStack:
     ``app_dir`` defaults to the nearest directory containing an ``openhost.toml``,
     found by walking up from the current working directory. Pass it explicitly to
     override (e.g. when tests run from outside the app tree).
+
+    The harness injects the same identity/router env vars the real OpenHost
+    router gives an app (``OPENHOST_APP_NAME``, ``OPENHOST_ZONE_DOMAIN``,
+    ``OPENHOST_ROUTER_URL``, etc.) so apps boot under test without a project
+    ``conftest`` having to hand-roll them. ``zone_domain`` and ``owner_username``
+    are the test-tunable ones; anything in ``extra_env`` overrides them.
     """
 
     app_dir: Path = attr.field(default=None, converter=_resolve_app_dir)
@@ -93,6 +106,10 @@ class OpenhostStack:
     image_name: str | None = None
     container_name: str | None = None
     readiness_timeout: float = 30.0
+    zone_domain: str = "localhost"
+    """Stands in for the compute space's domain (``OPENHOST_ZONE_DOMAIN``)."""
+    owner_username: str = "owner"
+    """Stands in for the compute space owner's display name (``OPENHOST_OWNER_USERNAME``)."""
 
     _manifest: OpenhostManifest = attr.field(init=False)
     _data_dir: Path = attr.field(init=False)
@@ -138,6 +155,29 @@ class OpenhostStack:
         """
         return self._temp_dir
 
+    # ─── Env ───
+
+    def _router_env(self) -> dict[str, str]:
+        """Identity/router env vars the real OpenHost router injects into every app.
+
+        Mirrors ``compute_space.core.data.provision_data`` for the vars the mock
+        can give a sensible local value. Vars tied to platform machinery the mock
+        doesn't run are intentionally omitted: ``OPENHOST_APP_ARCHIVE_DIR``
+        (S3/JuiceFS-backed), ``OPENHOST_AUTH_PUBLIC_KEY`` (JWT signing keys), and
+        the ``access_all_data`` / ``access_vm_data`` mounts.
+        """
+        return {
+            "OPENHOST_APP_NAME": self._manifest.app.name,
+            "OPENHOST_APP_ID": _DEFAULT_APP_ID,
+            "OPENHOST_APP_TOKEN": _DEFAULT_APP_TOKEN,
+            # The mock router runs on the host; from inside the container the host
+            # is reachable at podman's host-gateway alias.
+            "OPENHOST_ROUTER_URL": f"http://host.containers.internal:{self._router_port}",
+            "OPENHOST_ZONE_DOMAIN": self.zone_domain,
+            "OPENHOST_MY_REDIRECT_DOMAIN": f"my.{self.zone_domain}",
+            "OPENHOST_OWNER_USERNAME": self.owner_username,
+        }
+
     # ─── Lifecycle ───
 
     def __enter__(self) -> Self:
@@ -168,7 +208,10 @@ class OpenhostStack:
         self._app_host_port = free_port()
         self._router_port = free_port()
 
-        env = dict(self._manifest.env_for_data_mount(self._data_dir))
+        # Layered low-to-high precedence: router identity, then manifest-driven
+        # data-mount vars, then caller overrides.
+        env = self._router_env()
+        env.update(self._manifest.env_for_data_mount(self._data_dir))
         env.update(self.extra_env)
 
         mounts = {self._data_dir: f"/data/app_data/{self._manifest.app.name}"}
