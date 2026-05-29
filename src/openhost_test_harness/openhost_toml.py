@@ -26,6 +26,7 @@ class RuntimeSection:
 class DataSection:
     sqlite: tuple[str, ...] = ()
     app_data: bool = False
+    app_temp_data: bool = False
 
 
 @attr.frozen
@@ -64,6 +65,7 @@ class OpenhostManifest:
             data=DataSection(
                 sqlite=tuple(data_raw.get("sqlite", ())),
                 app_data=bool(data_raw.get("app_data", False)),
+                app_temp_data=bool(data_raw.get("app_temp_data", False)),
             ),
             routing=RoutingSection(
                 health_check=routing_raw.get("health_check"),
@@ -83,6 +85,8 @@ class OpenhostManifest:
         env: dict[str, str] = {}
         if self.data.app_data:
             env["OPENHOST_APP_DATA_DIR"] = container_dir
+        if self.data.app_temp_data:
+            env["OPENHOST_APP_TEMP_DIR"] = f"/data/app_temp_data/{self.app.name}"
         for db in self.data.sqlite:
             env[f"OPENHOST_SQLITE_{db.upper()}"] = f"{container_dir}/sqlite/{db}.db"
         return env
