@@ -19,15 +19,16 @@ Requires podman on the host.
 
 ```python
 # tests/conftest.py
-from pathlib import Path
 import pytest
 from openhost_test_harness import OpenhostStack
 
 @pytest.fixture(scope="session")
 def stack():
-    with OpenhostStack(app_dir=Path(__file__).resolve().parent.parent) as s:
+    with OpenhostStack() as s:  # app_dir found by walking up from the cwd to the nearest openhost.toml
         yield s
 ```
+
+`app_dir` is optional — by default the harness walks up from the current working directory until it finds an `openhost.toml`. Pass `app_dir=...` to set it explicitly (e.g. when tests run from outside the app tree).
 
 ```python
 # tests/test_thing.py

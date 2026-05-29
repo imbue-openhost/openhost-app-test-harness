@@ -34,6 +34,22 @@ class RoutingSection:
     public_paths: tuple[str, ...] = ()
 
 
+def find_manifest_dir(start: Path | None = None) -> Path:
+    """Walk up from ``start`` (default: the current working directory) until a directory containing an
+    ``openhost.toml`` is found, and return that directory.
+
+    Raises ``FileNotFoundError`` if no manifest is found in ``start`` or any of its parents.
+    """
+    start = (start or Path.cwd()).resolve()
+    for directory in (start, *start.parents):
+        if (directory / "openhost.toml").is_file():
+            return directory
+    raise FileNotFoundError(
+        f"no openhost.toml found in {start} or any parent directory; "
+        f"pass app_dir=... to OpenhostStack to set it explicitly"
+    )
+
+
 @attr.frozen
 class OpenhostManifest:
     app: AppSection
