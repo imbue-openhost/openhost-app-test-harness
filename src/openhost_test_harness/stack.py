@@ -48,6 +48,28 @@ def _resolve_app_dir(value: Path | str | None) -> Path:
     return Path(value)
 
 
+def _bind_mount_temp_base() -> str | None:
+    """Base directory for the harness's bind-mounted data/temp dirs.
+
+    The dirs created here are bind-mounted into the app container, so they must
+    live somewhere the container runtime can actually see. On macOS podman runs
+    inside a VM that only shares a fixed set of host paths (by default /Users,
+    /private and /var/folders); a sandboxed or relocated ``TMPDIR`` (e.g.
+    ``/tmp/claude-501``) is not shared, so mounting a dir created there fails
+    with ``statfs ... no such file or directory``.
+
+    To make the mount work regardless of the ambient ``TMPDIR``, pin the base
+    under ``$HOME`` (shared as /Users) on macOS. Elsewhere containers run on the
+    host kernel with no VM boundary, so the system default tempdir is fine and
+    we return ``None`` to let ``tempfile`` choose it.
+    """
+    if sys.platform != "darwin":
+        return None
+    base = Path.home() / ".cache" / "openhost-test-harness" / "tmp"
+    base.mkdir(parents=True, exist_ok=True)
+    return str(base)
+
+
 @attr.define
 class OpenhostStack:
     """Build, start, and front an Openhost app with a mock router for tests.
@@ -138,7 +160,8 @@ class OpenhostStack:
         if self.rebuild:
             build_image(self.app_dir, self._resolved_image_name, dockerfile=self._manifest.runtime.image)
 
-        self._data_dir = Path(tempfile.mkdtemp(prefix=f"openhost-test-{self._manifest.app.name}-"))
+        tmp_base = _bind_mount_temp_base()
+        self._data_dir = Path(tempfile.mkdtemp(prefix=f"openhost-test-{self._manifest.app.name}-", dir=tmp_base))
         if self._manifest.data.sqlite:
             (self._data_dir / "sqlite").mkdir(parents=True, exist_ok=True)
 
@@ -151,7 +174,7 @@ class OpenhostStack:
         mounts = {self._data_dir: f"/data/app_data/{self._manifest.app.name}"}
 
         if self._manifest.data.app_temp_data:
-            self._temp_dir = Path(tempfile.mkdtemp(prefix=f"openhost-test-{self._manifest.app.name}-temp-"))
+            self._temp_dir = Path(tempfile.mkdtemp(prefix=f"openhost-test-{self._manifest.app.name}-temp-", dir=tmp_base))
             mounts[self._temp_dir] = f"/data/app_temp_data/{self._manifest.app.name}"
 
         start_container(
