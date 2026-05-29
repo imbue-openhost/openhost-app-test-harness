@@ -50,6 +50,7 @@ def test_index(stack):
 | `[runtime.container].image` | Dockerfile path |
 | `[data].sqlite` | sqlite mount + `OPENHOST_SQLITE_*` env |
 | `[data].app_data` | app-data mount + `OPENHOST_APP_DATA_DIR` env |
+| `[data].app_temp_data` | temp-data mount + `OPENHOST_APP_TEMP_DIR` env |
 | `[routing].health_check` | readiness probe path (defaults to `/`) |
 
 ## Pieces

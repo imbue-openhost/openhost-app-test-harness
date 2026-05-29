@@ -59,6 +59,7 @@ class OpenhostStack:
 
     _manifest: OpenhostManifest = attr.field(init=False)
     _data_dir: Path = attr.field(init=False)
+    _temp_dir: Path | None = attr.field(init=False, default=None)
     _app_host_port: int = attr.field(init=False)
     _router_port: int = attr.field(init=False)
     _router_proc: subprocess.Popen | None = attr.field(init=False, default=None)
@@ -91,6 +92,14 @@ class OpenhostStack:
     def data_dir(self) -> Path:
         """Host-side directory mounted into the container at /data/app_data/<app-name>."""
         return self._data_dir
+
+    @property
+    def temp_data_dir(self) -> Path | None:
+        """Host-side dir mounted at /data/app_temp_data/<app-name>, or None.
+
+        Present only when the manifest requests ``[data].app_temp_data``.
+        """
+        return self._temp_dir
 
     # ─── Lifecycle ───
 
@@ -125,6 +134,10 @@ class OpenhostStack:
         env.update(self.extra_env)
 
         mounts = {self._data_dir: f"/data/app_data/{self._manifest.app.name}"}
+
+        if self._manifest.data.app_temp_data:
+            self._temp_dir = Path(tempfile.mkdtemp(prefix=f"openhost-test-{self._manifest.app.name}-temp-"))
+            mounts[self._temp_dir] = f"/data/app_temp_data/{self._manifest.app.name}"
 
         start_container(
             image_name=self._resolved_image_name,
@@ -177,6 +190,7 @@ class OpenhostStack:
 
         stop_container(self._resolved_container_name)
 
-        data_dir = getattr(self, "_data_dir", None)
-        if data_dir is not None and data_dir.exists():
-            shutil.rmtree(data_dir, ignore_errors=True)
+        for attr_name in ("_data_dir", "_temp_dir"):
+            d = getattr(self, attr_name, None)
+            if d is not None and d.exists():
+                shutil.rmtree(d, ignore_errors=True)
