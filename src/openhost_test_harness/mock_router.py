@@ -34,6 +34,18 @@ logger = logging.getLogger(__name__)
 AUTH_HEADER_NAME = "x-openhost-is-owner"
 AUTH_HEADER_VALUE = "true"
 
+# The router is the sole authority for X-OpenHost-* identity headers; any inbound
+# value is dropped so a client can't spoof identity to the backend app.
+OPENHOST_HEADER_PREFIX = "x-openhost-"
+
+# Hop-by-hop / negotiation headers not forwarded to the backend. `accept-encoding`
+# is dropped so httpx negotiates only encodings it can decode (see _proxy_http).
+REQUEST_EXCLUDED_HEADERS = frozenset({"host", "connection", "transfer-encoding", "accept-encoding"})
+
+# Response headers we re-derive ourselves. `content-encoding` is dropped because
+# httpx hands us an already-decoded body; `content-length` is recomputed.
+RESPONSE_EXCLUDED_HEADERS = frozenset({"content-encoding", "content-length", "transfer-encoding", "connection"})
+
 
 @attr.s(auto_attribs=True, frozen=True)
 class RouterConfig:
@@ -59,17 +71,22 @@ def make_app(config: RouterConfig) -> Litestar:
         if query:
             upstream_url = f"{upstream_url}?{query}"
 
+        # Strip hop-by-hop and encoding-negotiation headers before forwarding,
+        # matching the real Openhost router. Dropping `accept-encoding` is what
+        # keeps the response decodable: httpx then negotiates only the encodings
+        # it can actually decode, so the backend won't reply with e.g. zstd/br
+        # that httpx leaves compressed -- which we'd otherwise forward as an
+        # undecodable body after stripping Content-Encoding below. Inbound
+        # X-OpenHost-* headers are dropped (the router is their sole authority)
+        # and the owner header is injected.
         headers: list[tuple[str, str]] = []
-        seen_auth = False
         for raw_k, raw_v in scope["headers"]:
             k = raw_k.decode()
-            if k.lower() == "host":
+            lk = k.lower()
+            if lk in REQUEST_EXCLUDED_HEADERS or lk.startswith(OPENHOST_HEADER_PREFIX):
                 continue
-            if k.lower() == AUTH_HEADER_NAME:
-                seen_auth = True
             headers.append((k, raw_v.decode()))
-        if not seen_auth:
-            headers.append((AUTH_HEADER_NAME, AUTH_HEADER_VALUE))
+        headers.append((AUTH_HEADER_NAME, AUTH_HEADER_VALUE))
 
         body = b""
         while True:
@@ -84,9 +101,11 @@ def make_app(config: RouterConfig) -> Litestar:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             upstream_resp = await client.request(method, upstream_url, headers=headers, content=body)
 
+        # httpx has already decoded any Content-Encoding the backend applied, so
+        # we drop that header and recompute Content-Length from the decoded body.
         response_headers: list[tuple[bytes, bytes]] = []
         for k, v in upstream_resp.headers.multi_items():
-            if k.lower() in ("transfer-encoding", "content-encoding", "content-length"):
+            if k.lower() in RESPONSE_EXCLUDED_HEADERS:
                 continue
             response_headers.append((k.encode(), v.encode()))
         response_headers.append((b"content-length", str(len(upstream_resp.content)).encode()))
