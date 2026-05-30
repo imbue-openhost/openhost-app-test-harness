@@ -52,6 +52,12 @@ def start_container(
         container_name,
         "-p",
         f"{host_port}:{container_port}",
+        # Make the host reachable from inside the container under the same
+        # aliases the real OpenHost router uses, so OPENHOST_ROUTER_URL
+        # (host.containers.internal) resolves and host.docker.internal keeps
+        # working for existing Dockerfiles.
+        "--add-host=host.containers.internal:host-gateway",
+        "--add-host=host.docker.internal:host-gateway",
     ]
     for host_path, container_path in (mounts or {}).items():
         cmd += ["-v", f"{host_path}:{container_path}:Z"]

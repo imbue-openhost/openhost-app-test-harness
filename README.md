@@ -54,6 +54,29 @@ def test_index(stack):
 | `[data].app_temp_data` | temp-data mount + `OPENHOST_APP_TEMP_DIR` env |
 | `[routing].health_check` | readiness probe path (defaults to `/`) |
 
+## Injected environment variables
+
+The harness injects the same identity/router env vars the real OpenHost router gives an app, so apps boot under test without your `conftest` hand-rolling them:
+
+| Variable | Value under the harness |
+|---|---|
+| `OPENHOST_APP_NAME` | `[app].name` from the manifest |
+| `OPENHOST_APP_ID` | a stable test stand-in |
+| `OPENHOST_APP_TOKEN` | a fixed test stand-in (the mock router doesn't verify it) |
+| `OPENHOST_ROUTER_URL` | `http://host.containers.internal:<router-port>` — the mock router, reachable from inside the container |
+| `OPENHOST_ZONE_DOMAIN` | `zone_domain` (default `localhost`) |
+| `OPENHOST_MY_REDIRECT_DOMAIN` | `my.<zone_domain>` |
+| `OPENHOST_OWNER_USERNAME` | `owner_username` (default `owner`) |
+| `OPENHOST_APP_DATA_DIR`, `OPENHOST_APP_TEMP_DIR`, `OPENHOST_SQLITE_<name>` | set per the manifest's `[data]` requests |
+
+`zone_domain` and `owner_username` are constructor args; anything you pass in `extra_env` overrides the defaults above:
+
+```python
+OpenhostStack(zone_domain="example.com", owner_username="alice")
+```
+
+Not injected, because the mock doesn't back them: `OPENHOST_APP_ARCHIVE_DIR` (S3/JuiceFS), `OPENHOST_AUTH_PUBLIC_KEY` (JWT signing keys), and the `access_all_data` / `access_vm_data` mounts.
+
 ## Pieces
 
 - `OpenhostStack` — high-level fixture above
