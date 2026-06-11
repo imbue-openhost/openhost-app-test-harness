@@ -2,7 +2,8 @@
 
 Proxies HTTP and WebSocket traffic to an upstream app (e.g. an app container),
 injecting ``X-OpenHost-Is-Owner: true`` on every request to simulate an
-authenticated owner session.
+authenticated owner session, plus the ``X-Forwarded-*`` headers the real router
+adds so apps can reconstruct their external base URL.
 
 Library usage:
 
@@ -80,12 +81,24 @@ def make_app(config: RouterConfig) -> Litestar:
         # X-OpenHost-* headers are dropped (the router is their sole authority)
         # and the owner header is injected.
         headers: list[tuple[str, str]] = []
+        inbound_host = ""
         for raw_k, raw_v in scope["headers"]:
             k = raw_k.decode()
             lk = k.lower()
+            if lk == "host":
+                inbound_host = raw_v.decode()
             if lk in REQUEST_EXCLUDED_HEADERS or lk.startswith(OPENHOST_HEADER_PREFIX):
                 continue
             headers.append((k, raw_v.decode()))
+        # Forwarding headers, matching the real router: without X-Forwarded-Host the
+        # app would build absolute URLs (e.g. OAuth redirect URIs) from the Host
+        # header httpx sends upstream — its direct container address — and browsers
+        # following them would escape the router (and lose the owner header).
+        if inbound_host:
+            headers.append(("X-Forwarded-Host", inbound_host))
+        if scope.get("client"):
+            headers.append(("X-Forwarded-For", scope["client"][0]))
+        headers.append(("X-Forwarded-Proto", scope["scheme"]))
         headers.append((AUTH_HEADER_NAME, AUTH_HEADER_VALUE))
 
         body = b""
@@ -131,7 +144,15 @@ def make_app(config: RouterConfig) -> Litestar:
         if query:
             upstream_url = f"{upstream_url}?{query}"
 
+        # Same forwarding headers as the HTTP path, minus proto (the real router
+        # only adds X-Forwarded-Proto for HTTP).
         additional_headers = {AUTH_HEADER_NAME: AUTH_HEADER_VALUE}
+        for raw_k, raw_v in scope["headers"]:
+            if raw_k.decode().lower() == "host":
+                additional_headers["X-Forwarded-Host"] = raw_v.decode()
+                break
+        if scope.get("client"):
+            additional_headers["X-Forwarded-For"] = scope["client"][0]
 
         msg = await receive()
         if msg["type"] != "websocket.connect":
