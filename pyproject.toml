@@ -8,7 +8,7 @@ dependencies = [
     "httpx>=0.27",
     "websockets>=12",
     "hypercorn>=0.17",
-    "litestar>=2.10",
+    "litestar>=2.22.0",
 ]
 
 [build-system]
