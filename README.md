@@ -1,4 +1,9 @@
-# openhost-app-test-harness
+
+# DEPRECATED
+
+this repo is deprecated, use https://github.com/imbue-openhost/openhost/tree/main/openhost_app_test_harness instead! 
+
+# OLD README
 
 Test scaffolding for [Openhost](https://github.com/imbue-openhost) apps. Builds an app's Dockerfile, runs it under podman with the mounts and env vars its `openhost.toml` declares, and fronts the container with a mock Openhost router that injects the owner-auth header.
 
